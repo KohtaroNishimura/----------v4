@@ -11,6 +11,7 @@ const API_ENDPOINTS = {
 };
 
 const PERSIST_DEBOUNCE_MS = 800;
+const MAX_COUNT_SELECT = 20;
 let persistTimer = null;
 
 const defaultInventory = [
@@ -134,42 +135,30 @@ function renderInventoryRows() {
     const idealTd = document.createElement("td");
     idealTd.dataset.label = "理想";
     idealTd.classList.add("cell-ideal");
-    const idealInput = document.createElement("input");
-    idealInput.type = "number";
-    idealInput.min = "0";
-    idealInput.step = "1";
-    idealInput.inputMode = "numeric";
-    idealInput.value = item.ideal ?? 0;
-    idealInput.addEventListener("input", () => {
+    const idealSelect = createCountSelect(item.ideal ?? 0, (nextValue) => {
       updateInventoryItem(
         item.id,
         {
-          ideal: parseNumber(idealInput.value, 0),
+          ideal: nextValue,
         },
         tr,
       );
     });
-    idealTd.appendChild(idealInput);
+    idealTd.appendChild(idealSelect);
 
     const currentTd = document.createElement("td");
     currentTd.dataset.label = "現在庫";
     currentTd.classList.add("cell-current");
-    const currentInput = document.createElement("input");
-    currentInput.type = "number";
-    currentInput.min = "0";
-    currentInput.step = "1";
-    currentInput.inputMode = "numeric";
-    currentInput.value = item.current ?? 0;
-    currentInput.addEventListener("input", () => {
+    const currentSelect = createCountSelect(item.current ?? 0, (nextValue) => {
       updateInventoryItem(
         item.id,
         {
-          current: parseNumber(currentInput.value, 0),
+          current: nextValue,
         },
         tr,
       );
     });
-    currentTd.appendChild(currentInput);
+    currentTd.appendChild(currentSelect);
 
     const shortageTd = document.createElement("td");
     shortageTd.dataset.label = "不足";
@@ -478,6 +467,31 @@ function createActionButton(label, title, handler) {
   button.title = title;
   button.addEventListener("click", handler);
   return button;
+}
+
+function createCountSelect(value, onChange) {
+  const select = document.createElement("select");
+  select.classList.add("count-select");
+  const sanitized = Math.max(0, parseNumber(value, 0));
+  for (let i = 0; i <= MAX_COUNT_SELECT; i += 1) {
+    const option = document.createElement("option");
+    option.value = String(i);
+    option.textContent = String(i);
+    select.appendChild(option);
+  }
+  if (sanitized > MAX_COUNT_SELECT) {
+    const extraOption = document.createElement("option");
+    extraOption.value = String(sanitized);
+    extraOption.textContent = String(sanitized);
+    select.appendChild(extraOption);
+  }
+  select.value = String(
+    sanitized > MAX_COUNT_SELECT ? sanitized : Math.min(sanitized, MAX_COUNT_SELECT),
+  );
+  select.addEventListener("change", () => {
+    onChange(parseNumber(select.value, 0));
+  });
+  return select;
 }
 
 function createDragHandle(row) {
