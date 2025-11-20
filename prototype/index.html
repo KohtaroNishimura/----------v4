@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>上等たこ焼き 在庫＆日報プロトタイプ</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>在庫＆日報</h1>
+    </header>
+
+    <main>
+      <section class="card">
+        <h2>1. 在庫棚の撮影</h2>
+        <label class="file-input">
+          <span>棚の写真を撮影/選択</span>
+          <input
+            type="file"
+            id="inventory-photo"
+            accept="image/*"
+            capture="environment"
+          />
+        </label>
+        <div id="photo-preview" class="photo-preview hidden">
+          <img id="preview-img" alt="在庫棚プレビュー" />
+          <button id="remove-photo" type="button">写真を削除</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-header">
+          <h2>2. 在庫入力</h2>
+          <button id="add-item" type="button">＋ 材料追加</button>
+        </div>
+        <p>Vision API連携までは手入力で不足数を確認します。</p>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>材料名</th>
+                <th>理想</th>
+                <th>現在庫</th>
+                <th>不足</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="inventory-rows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>3. 日報テンプレ</h2>
+        <form id="report-form">
+          <div class="grid">
+            <label>
+              処分したたこ焼き（ロス）
+              <input
+                type="number"
+                id="loss"
+                min="0"
+                step="1"
+                value="0"
+                inputmode="numeric"
+              />
+            </label>
+            <label>
+              セット数
+              <input
+                type="number"
+                id="set-count"
+                min="0"
+                step="0.5"
+                value="0"
+                inputmode="decimal"
+              />
+            </label>
+            <label>
+              営業時間（生産性）
+              <input
+                type="number"
+                id="operation-hours"
+                min="0"
+                step="0.5"
+                value="0"
+                inputmode="decimal"
+              />
+            </label>
+            <label>
+              売上
+              <input
+                type="number"
+                id="sales"
+                min="0"
+                step="500"
+                value="0"
+                inputmode="numeric"
+              />
+            </label>
+          </div>
+          <label>
+            所感・気づき・困りごと
+            <textarea
+              id="insights"
+              rows="4"
+              placeholder="感じたこと、疑問点、改善が必要なことなど"
+            ></textarea>
+          </label>
+        </form>
+      </section>
+
+      <section class="card">
+        <div class="section-header">
+          <h2>4. LINE送信用メッセージ</h2>
+        </div>
+        <textarea id="line-preview" rows="12" readonly></textarea>
+        <div class="inline-actions">
+          <button id="copy-message" type="button">コピー</button>
+          <span id="copy-status"></span>
+        </div>
+        <p class="hint">
+          将来的にはLINE Messaging APIと連携し、今夜の報告を1タップで送信できます。
+          それまではコピー→LINEに貼り付けてご利用ください。
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <small>Prototype v3</small>
+    </footer>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

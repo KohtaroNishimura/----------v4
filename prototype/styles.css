@@ -1,0 +1,198 @@
+:root {
+  font-family: "Hiragino Sans", "Noto Sans JP", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  color: #101010;
+  background: #f4f6f8;
+  line-height: 1.5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0 1rem 2.5rem;
+}
+
+header,
+main,
+footer {
+  max-width: 960px;
+  margin: 1.5rem auto;
+}
+
+header h1 {
+  margin-bottom: 0.2rem;
+}
+
+main {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 1.2rem 1.4rem;
+  box-shadow: 0 12px 32px rgba(15, 30, 60, 0.08);
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+button,
+.file-input span {
+  background: #0070f3;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 0.65rem 1.2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+button:active,
+.file-input span:active {
+  opacity: 0.8;
+}
+
+.file-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.8rem;
+}
+
+.file-input input {
+  display: none;
+}
+
+.photo-preview {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.photo-preview img {
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  border-radius: 12px;
+  border: 1px solid #e0e0e0;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  border-bottom: 1px solid #f0f0f0;
+  padding: 0.6rem;
+}
+
+td input[type="text"],
+td input[type="number"] {
+  width: 100%;
+  font-size: 1rem;
+}
+
+.row-actions {
+  white-space: nowrap;
+  min-width: 124px;
+}
+
+.row-actions button {
+  background: #edf2ff;
+  color: #1f3a7d;
+  border-radius: 8px;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.row-actions button + button {
+  margin-left: 0.35rem;
+}
+
+.row-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+input,
+textarea {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid #d4d4d4;
+  padding: 0.55rem;
+  font-size: 1rem;
+}
+
+textarea {
+  resize: vertical;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.inline-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  margin-top: 0.8rem;
+}
+
+.hint {
+  color: #555;
+  font-size: 0.9rem;
+  margin-top: 0.8rem;
+}
+
+footer {
+  text-align: center;
+  color: #555;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 640px) {
+  body {
+    padding: 0 0.75rem 2.5rem;
+  }
+  .card {
+    padding: 1rem;
+  }
+  table {
+    font-size: 0.95rem;
+  }
+  button,
+  .file-input span {
+    width: 100%;
+    text-align: center;
+  }
+}
