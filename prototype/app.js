@@ -168,7 +168,6 @@ function renderInventoryRows() {
     setShortageAlert(shortageTd, item);
 
     const actionsTd = document.createElement("td");
-    actionsTd.dataset.label = "操作";
     actionsTd.classList.add("row-actions", "cell-actions");
     const dragHandle = createDragHandle(tr);
     const deleteButton = createActionButton("削除", "行を削除", () =>
