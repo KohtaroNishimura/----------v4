@@ -38,10 +38,6 @@ const state = {
   photo: null,
 };
 
-const dragState = {
-  row: null,
-};
-
 const elements = {
   inventoryBody: document.getElementById("inventory-rows"),
   addItemButton: document.getElementById("add-item"),
@@ -70,7 +66,6 @@ function attachEventListeners() {
   elements.addItemButton?.addEventListener("click", addInventoryRow);
   elements.photoInput?.addEventListener("change", handlePhotoChange);
   elements.removePhotoButton?.addEventListener("click", removePhoto);
-  elements.inventoryBody?.addEventListener("dragover", handleBodyDragOver);
 
   if (elements.reportForm) {
     const reportFields = [
@@ -99,17 +94,11 @@ function renderInventoryRows() {
   if (!elements.inventoryBody) return;
   elements.inventoryBody.innerHTML = "";
 
-  state.inventory.forEach((item) => {
+  state.inventory.forEach((item, index) => {
     const tr = document.createElement("tr");
-    tr.classList.add("inventory-row");
     tr.dataset.id = item.id;
-    tr.addEventListener("dragover", handleRowDragOver);
-    tr.addEventListener("dragenter", handleRowDragEnter);
-    tr.addEventListener("drop", handleRowDragEnter);
 
     const nameTd = document.createElement("td");
-    nameTd.dataset.label = "材料名";
-    nameTd.classList.add("cell-name");
     const nameInput = document.createElement("input");
     nameInput.type = "text";
     nameInput.value = item.name ?? "";
@@ -132,8 +121,6 @@ function renderInventoryRows() {
     nameTd.appendChild(nameInput);
 
     const idealTd = document.createElement("td");
-    idealTd.dataset.label = "理想";
-    idealTd.classList.add("cell-ideal");
     const idealInput = document.createElement("input");
     idealInput.type = "number";
     idealInput.min = "0";
@@ -152,8 +139,6 @@ function renderInventoryRows() {
     idealTd.appendChild(idealInput);
 
     const currentTd = document.createElement("td");
-    currentTd.dataset.label = "現在庫";
-    currentTd.classList.add("cell-current");
     const currentInput = document.createElement("input");
     currentInput.type = "number";
     currentInput.min = "0";
@@ -172,20 +157,23 @@ function renderInventoryRows() {
     currentTd.appendChild(currentInput);
 
     const shortageTd = document.createElement("td");
-    shortageTd.dataset.label = "不足";
-    shortageTd.classList.add("cell-shortage");
     shortageTd.dataset.role = "shortage";
     shortageTd.textContent = formatShortage(item);
-    setShortageAlert(shortageTd, item);
 
     const actionsTd = document.createElement("td");
-    actionsTd.dataset.label = "操作";
-    actionsTd.classList.add("row-actions", "cell-actions");
-    const dragHandle = createDragHandle(tr);
+    actionsTd.classList.add("row-actions");
+    const upButton = createActionButton("↑", "上に移動", () =>
+      moveInventoryItem(item.id, -1),
+    );
+    upButton.disabled = index === 0;
+    const downButton = createActionButton("↓", "下に移動", () =>
+      moveInventoryItem(item.id, 1),
+    );
+    downButton.disabled = index === state.inventory.length - 1;
     const deleteButton = createActionButton("削除", "行を削除", () =>
       removeInventoryItem(item.id),
     );
-    actionsTd.append(dragHandle, deleteButton);
+    actionsTd.append(upButton, downButton, deleteButton);
 
     tr.append(nameTd, idealTd, currentTd, shortageTd, actionsTd);
     elements.inventoryBody.appendChild(tr);
@@ -210,13 +198,7 @@ function updateShortageCell(id, rowElement) {
     rowElement.querySelector('[data-role="shortage"]') || rowElement.lastChild;
   if (!shortageCell) return;
   const item = state.inventory.find((entry) => entry.id === id);
-  if (!item) {
-    shortageCell.textContent = "";
-    shortageCell.classList.remove("is-shortage");
-    return;
-  }
-  shortageCell.textContent = formatShortage(item);
-  setShortageAlert(shortageCell, item);
+  shortageCell.textContent = item ? formatShortage(item) : "";
 }
 
 function addInventoryRow() {
@@ -236,6 +218,20 @@ function removeInventoryItem(id) {
   if (!state.inventory.length) {
     state.inventory = clone(defaultInventory);
   }
+  queuePersistState();
+  renderInventoryRows();
+  updateLinePreview();
+}
+
+function moveInventoryItem(id, direction) {
+  const index = state.inventory.findIndex((item) => item.id === id);
+  if (index === -1) return;
+  const targetIndex = index + direction;
+  if (targetIndex < 0 || targetIndex >= state.inventory.length) return;
+  const updated = [...state.inventory];
+  const [moved] = updated.splice(index, 1);
+  updated.splice(targetIndex, 0, moved);
+  state.inventory = updated;
   queuePersistState();
   renderInventoryRows();
   updateLinePreview();
@@ -364,7 +360,7 @@ function buildLineMessage() {
   const shortageItems = state.inventory
     .map((item) => ({
       ...item,
-      shortage: getShortageAmount(item),
+      shortage: Math.max(0, (item.ideal ?? 0) - (item.current ?? 0)),
     }))
     .filter((item) => item.shortage > 0);
 
@@ -431,19 +427,8 @@ function showCopyStatus(message) {
 }
 
 function formatShortage(item) {
-  const shortage = getShortageAmount(item);
-  return shortage > 0 ? `${shortage}` : "OK";
-}
-
-function getShortageAmount(item) {
-  if (!item) return 0;
-  return Math.max(0, (item.ideal ?? 0) - (item.current ?? 0));
-}
-
-function setShortageAlert(cell, item) {
-  if (!cell) return;
-  const shortage = getShortageAmount(item);
-  cell.classList.toggle("is-shortage", shortage > 0);
+  const shortage = Math.max(0, (item.ideal ?? 0) - (item.current ?? 0));
+  return shortage > 0 ? `不足 ${shortage}` : "OK";
 }
 
 function parseNumber(value, fallback = 0) {
@@ -479,89 +464,6 @@ function createActionButton(label, title, handler) {
   button.title = title;
   button.addEventListener("click", handler);
   return button;
-}
-
-function createDragHandle(row) {
-  const handle = document.createElement("button");
-  handle.type = "button";
-  handle.classList.add("drag-handle");
-  handle.setAttribute("draggable", "true");
-  handle.title = "ドラッグで並び替え";
-  handle.textContent = "⇅";
-  handle.addEventListener("dragstart", (event) =>
-    handleRowDragStart(event, row),
-  );
-  handle.addEventListener("dragend", handleRowDragEnd);
-  return handle;
-}
-
-function handleRowDragStart(event, row) {
-  dragState.row = row;
-  row.classList.add("dragging");
-  if (event.dataTransfer) {
-    event.dataTransfer.effectAllowed = "move";
-    try {
-      event.dataTransfer.setData("text/plain", row.dataset.id ?? "");
-    } catch (error) {
-      /* noop */
-    }
-  }
-}
-
-function handleRowDragEnter(event) {
-  if (!dragState.row) return;
-  event.preventDefault();
-}
-
-function handleRowDragOver(event) {
-  if (!dragState.row) return;
-  event.preventDefault();
-  const target = event.currentTarget;
-  if (!(target instanceof HTMLElement)) return;
-  const draggingRow = dragState.row;
-  if (target === draggingRow) return;
-  const rect = target.getBoundingClientRect();
-  const shouldInsertBefore = event.clientY < rect.top + rect.height / 2;
-  const tbody = target.parentElement;
-  if (!tbody) return;
-  if (shouldInsertBefore) {
-    tbody.insertBefore(draggingRow, target);
-  } else {
-    tbody.insertBefore(draggingRow, target.nextSibling);
-  }
-}
-
-function handleBodyDragOver(event) {
-  if (!dragState.row) return;
-  event.preventDefault();
-  const tbody = event.currentTarget;
-  if (!(tbody instanceof HTMLElement)) return;
-  if (event.target === tbody) {
-    tbody.appendChild(dragState.row);
-  }
-}
-
-function handleRowDragEnd() {
-  if (!dragState.row) return;
-  dragState.row.classList.remove("dragging");
-  applyDraggedOrder();
-  dragState.row = null;
-}
-
-function applyDraggedOrder() {
-  if (!elements.inventoryBody) return;
-  const orderedIds = Array.from(
-    elements.inventoryBody.querySelectorAll("tr"),
-  ).map((row) => row.dataset.id);
-  if (!orderedIds.length) return;
-  const nextInventory = orderedIds
-    .map((id) => state.inventory.find((item) => item.id === id))
-    .filter(Boolean);
-  if (nextInventory.length !== state.inventory.length) return;
-  state.inventory = nextInventory;
-  queuePersistState();
-  renderInventoryRows();
-  updateLinePreview();
 }
 
 function camelCase(id) {
