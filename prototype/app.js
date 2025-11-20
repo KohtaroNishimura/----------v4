@@ -99,7 +99,6 @@ function renderInventoryRows() {
     tr.dataset.id = item.id;
 
     const nameTd = document.createElement("td");
-    nameTd.dataset.label = "材料名";
     const nameInput = document.createElement("input");
     nameInput.type = "text";
     nameInput.value = item.name ?? "";
@@ -122,7 +121,6 @@ function renderInventoryRows() {
     nameTd.appendChild(nameInput);
 
     const idealTd = document.createElement("td");
-    idealTd.dataset.label = "理想";
     const idealInput = document.createElement("input");
     idealInput.type = "number";
     idealInput.min = "0";
@@ -141,7 +139,6 @@ function renderInventoryRows() {
     idealTd.appendChild(idealInput);
 
     const currentTd = document.createElement("td");
-    currentTd.dataset.label = "現在庫";
     const currentInput = document.createElement("input");
     currentInput.type = "number";
     currentInput.min = "0";
@@ -160,12 +157,10 @@ function renderInventoryRows() {
     currentTd.appendChild(currentInput);
 
     const shortageTd = document.createElement("td");
-    shortageTd.dataset.label = "不足";
     shortageTd.dataset.role = "shortage";
     shortageTd.textContent = formatShortage(item);
 
     const actionsTd = document.createElement("td");
-    actionsTd.dataset.label = "操作";
     actionsTd.classList.add("row-actions");
     const upButton = createActionButton("↑", "上に移動", () =>
       moveInventoryItem(item.id, -1),
