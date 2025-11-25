@@ -429,7 +429,8 @@ function formatShortage(item) {
 
 function getShortageAmount(item) {
   if (!item) return 0;
-  return Math.max(0, (item.ideal ?? 0) - (item.current ?? 0));
+  const shortageValue = Math.max(0, (item.ideal ?? 0) - (item.current ?? 0));
+  return Math.ceil(shortageValue);
 }
 
 function setShortageAlert(cell, item) {
