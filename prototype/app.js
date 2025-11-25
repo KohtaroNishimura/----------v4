@@ -527,6 +527,18 @@ function sanitizeInventory(items) {
   }));
 }
 
+function sanitizeInventoryOptional(items) {
+  if (!Array.isArray(items) || !items.length) {
+    return [];
+  }
+  return items.map((item) => ({
+    id: item?.id ?? generateId(),
+    name: typeof item?.name === "string" ? item.name : "",
+    ideal: normalizeCount(item?.ideal),
+    current: normalizeCount(item?.current),
+  }));
+}
+
 function normalizeCount(value) {
   return Math.max(0, parseNumber(value, 0));
 }
@@ -772,17 +784,28 @@ function writeStorage(key, value) {
 async function bootstrapState() {
   try {
     const remote = await fetchStateFromServer();
-    const shouldSeedRemote =
-      !Array.isArray(remote?.inventory) || remote.inventory.length === 0;
-    applyStatePayload(remote);
-    persistStateLocally();
-    if (shouldSeedRemote && state.inventory.length) {
+    const remoteHasInventory =
+      Array.isArray(remote?.inventory) && remote.inventory.length > 0;
+    if (remoteHasInventory) {
+      applyStatePayload(remote);
+      persistStateLocally();
+      return;
+    }
+    const localSnapshot = readLocalStateSnapshot();
+    if (localSnapshot.inventory.length > 0) {
+      state.inventory = localSnapshot.inventory;
+      state.report = localSnapshot.report;
+      state.photo = localSnapshot.photo;
+      persistStateLocally();
       try {
         await pushStateToServer();
       } catch (error) {
-        console.warn("Failed to seed backend state", error);
+        console.warn("Failed to seed backend state from local snapshot", error);
       }
+      return;
     }
+    applyStatePayload(remote);
+    persistStateLocally();
   } catch (error) {
     console.warn("Falling back to local state", error);
     loadStateFromLocalStorage();
@@ -804,13 +827,14 @@ async function fetchStateFromServer() {
 }
 
 function loadStateFromLocalStorage() {
-  const storedInventory = readStorage(STORAGE_KEYS.inventory);
-  state.inventory = sanitizeInventory(
-    Array.isArray(storedInventory) ? storedInventory : clone(defaultInventory),
-  );
-  const storedReport = readStorage(STORAGE_KEYS.report);
-  state.report = { ...defaultReport, ...(storedReport || {}) };
-  state.photo = readStorage(STORAGE_KEYS.photo);
+  const snapshot = readLocalStateSnapshot();
+  if (snapshot.inventory.length > 0) {
+    state.inventory = snapshot.inventory;
+  } else {
+    state.inventory = clone(defaultInventory);
+  }
+  state.report = snapshot.report;
+  state.photo = snapshot.photo;
 }
 
 function applyStatePayload(payload) {
@@ -868,6 +892,17 @@ function serializeStateForTransport() {
 
 function clone(value) {
   return value.map((item) => ({ ...item }));
+}
+
+function readLocalStateSnapshot() {
+  const storedInventoryRaw = readStorage(STORAGE_KEYS.inventory);
+  const inventory = sanitizeInventoryOptional(
+    Array.isArray(storedInventoryRaw) ? storedInventoryRaw : [],
+  );
+  const storedReport = readStorage(STORAGE_KEYS.report);
+  const report = { ...defaultReport, ...(storedReport || {}) };
+  const photo = readStorage(STORAGE_KEYS.photo);
+  return { inventory, report, photo };
 }
 
 function buildDefaultInventory() {
