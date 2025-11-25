@@ -12,7 +12,7 @@ from openai import OpenAI
 import sqlite3
 import datetime
 
-from default_inventory import DEFAULT_INVENTORY
+from backend.default_inventory import DEFAULT_INVENTORY
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = PROJECT_ROOT / "prototype"
