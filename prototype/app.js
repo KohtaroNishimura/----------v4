@@ -149,15 +149,19 @@ function renderInventoryRows() {
     const currentTd = document.createElement("td");
     currentTd.dataset.label = "現在庫";
     currentTd.classList.add("cell-current");
-    const currentSelect = createCountSelect(item.current ?? 0, (nextValue) => {
-      updateInventoryItem(
-        item.id,
-        {
-          current: nextValue,
-        },
-        tr,
-      );
-    });
+    const currentSelect = createCountSelect(
+      item.current ?? 0,
+      (nextValue) => {
+        updateInventoryItem(
+          item.id,
+          {
+            current: nextValue,
+          },
+          tr,
+        );
+      },
+      { step: 0.5 },
+    );
     currentTd.appendChild(currentSelect);
 
     const shortageTd = document.createElement("td");
@@ -468,29 +472,60 @@ function createActionButton(label, title, handler) {
   return button;
 }
 
-function createCountSelect(value, onChange) {
+function createCountSelect(value, onChange, options = {}) {
+  const step =
+    typeof options.step === "number" && options.step > 0 ? options.step : 1;
   const select = document.createElement("select");
   select.classList.add("count-select");
   const sanitized = Math.max(0, parseNumber(value, 0));
-  for (let i = 0; i <= MAX_COUNT_SELECT; i += 1) {
+  const decimals = getDecimalPlaces(step);
+  const totalSteps = Math.ceil(MAX_COUNT_SELECT / step);
+  for (let i = 0; i <= totalSteps; i += 1) {
+    const numericValue = Math.min(MAX_COUNT_SELECT, i * step);
+    const optionValue = formatCountOptionValue(numericValue, decimals);
     const option = document.createElement("option");
-    option.value = String(i);
-    option.textContent = String(i);
+    option.value = optionValue;
+    option.textContent = optionValue;
     select.appendChild(option);
   }
-  if (sanitized > MAX_COUNT_SELECT) {
+  const needsCustomOption =
+    sanitized > MAX_COUNT_SELECT || !isMultipleOfStep(sanitized, step);
+  if (needsCustomOption) {
     const extraOption = document.createElement("option");
     extraOption.value = String(sanitized);
     extraOption.textContent = String(sanitized);
     select.appendChild(extraOption);
   }
-  select.value = String(
-    sanitized > MAX_COUNT_SELECT ? sanitized : Math.min(sanitized, MAX_COUNT_SELECT),
-  );
+  if (needsCustomOption) {
+    select.value = String(sanitized);
+  } else {
+    const initialValue = Math.min(sanitized, MAX_COUNT_SELECT);
+    select.value = formatCountOptionValue(initialValue, decimals);
+  }
   select.addEventListener("change", () => {
     onChange(parseNumber(select.value, 0));
   });
   return select;
+}
+
+function getDecimalPlaces(value) {
+  const str = String(value);
+  const decimalIndex = str.indexOf(".");
+  return decimalIndex === -1 ? 0 : str.length - decimalIndex - 1;
+}
+
+function formatCountOptionValue(value, decimals) {
+  if (decimals <= 0) {
+    return String(Math.round(value));
+  }
+  const normalized = Number(value.toFixed(decimals));
+  return String(normalized);
+}
+
+function isMultipleOfStep(value, step) {
+  if (step <= 0) return true;
+  const ratio = value / step;
+  return Math.abs(ratio - Math.round(ratio)) < 1e-6;
 }
 
 function createDragHandle(row) {
