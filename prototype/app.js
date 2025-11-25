@@ -391,42 +391,27 @@ function updateLinePreview() {
 }
 
 function buildLineMessage() {
-  const shortageItems = state.inventory
-    .map((item) => ({
-      ...item,
-      shortage: getShortageAmount(item),
-    }))
-    .filter((item) => item.shortage > 0);
-
   const lines = [];
+  lines.push("【日報】");
+  lines.push(formatReportNumber(state.report.loss));
+  lines.push(formatReportNumber(state.report.setCount));
+  lines.push(formatReportNumber(state.report.operationHours));
+  lines.push("");
+  lines.push(formatCurrency(state.report.sales));
+  lines.push("");
+  lines.push(formatInsightsText(state.report.insights));
 
-  if (shortageItems.length) {
-    lines.push("【在庫不足（推奨発注数）】");
-    shortageItems.forEach((item) => {
-      lines.push(
-        `・${item.name}: 理想${item.ideal} / 現在${item.current} → 不足${item.shortage}`,
-      );
-    });
-  } else {
-    lines.push("【在庫不足】なし（理想在庫クリア）");
-  }
-
-  const materialLine = getMaterialReceivedLine(
+  const materialLine = buildMaterialReceivedMessage(
     state.report.materialReceivedAt,
   );
   if (materialLine) {
     lines.push("", materialLine);
   }
 
-  lines.push("", "【日報テンプレ】");
-  lines.push(`${state.report.loss ?? 0} ←処分したたこ焼き（ロス）`);
-  lines.push(`${state.report.setCount ?? 0} ←セット数`);
-  lines.push(`${state.report.operationHours ?? 0} ←営業時間（生産性）`);
-  const salesValue = formatCurrency(state.report.sales);
-  lines.push(`${salesValue} ←売上`);
-  lines.push(
-    `所感・困りごと: ${state.report.insights?.trim() || "特記事項なし"}`,
-  );
+  const shortageLines = buildShortageRequestLines();
+  if (shortageLines.length) {
+    lines.push("", ...shortageLines);
+  }
 
   return lines.join("\n");
 }
@@ -491,6 +476,20 @@ function parseNumber(value, fallback = 0) {
 function formatCurrency(value) {
   const numeric = parseNumber(value, 0);
   return numeric.toLocaleString("ja-JP");
+}
+
+function formatReportNumber(value) {
+  const raw = typeof value === "number" ? value : parseNumber(value, NaN);
+  if (Number.isFinite(raw)) {
+    return String(raw);
+  }
+  const fallback = typeof value === "string" ? value.trim() : "";
+  return fallback || "0";
+}
+
+function formatInsightsText(value) {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  return trimmed || "特記事項なし。";
 }
 
 function ensureMaterialTimeOptions(select) {
@@ -619,11 +618,11 @@ function isMultipleOfStep(value, step) {
   return Math.abs(ratio - Math.round(ratio)) < 1e-6;
 }
 
-function getMaterialReceivedLine(value) {
+function buildMaterialReceivedMessage(value) {
   const parsed = parseMaterialReceivedAt(value);
   if (!parsed) return "";
   const formattedDate = formatMaterialReceivedDate(parsed.date);
-  return `材料受け取り: ${formattedDate} ${parsed.time}`;
+  return `${formattedDate} ${parsed.time}ごろに材料受け取り予定です。`;
 }
 
 function formatMaterialReceivedDate(dateString) {
@@ -636,6 +635,21 @@ function formatMaterialReceivedDate(dateString) {
     return dateString;
   }
   return `${year}/${numMonth}/${numDay}`;
+}
+
+function buildShortageRequestLines() {
+  const shortageItems = state.inventory
+    .map((item) => ({
+      ...item,
+      shortage: getShortageAmount(item),
+    }))
+    .filter((item) => item.shortage > 0);
+  if (!shortageItems.length) {
+    return ["理想在庫は足りています。"];
+  }
+  return shortageItems.map(
+    (item) => `${item.name}を${item.shortage}つ確保いただけると助かります。`,
+  );
 }
 
 function createDragHandle(row) {
