@@ -15,16 +15,7 @@ const MAX_COUNT_SELECT = 20;
 const MATERIAL_TIME_STEP_MINUTES = 30;
 let persistTimer = null;
 
-const defaultInventory = [
-  {
-    id: generateId(),
-    name: "サラダ油（8個入り）",
-    ideal: 8,
-    current: 8,
-  },
-  { id: generateId(), name: "出汁セット", ideal: 3, current: 3 },
-  { id: generateId(), name: "タコ（1袋）", ideal: 2, current: 2 },
-];
+const defaultInventory = buildDefaultInventory();
 
 const defaultReport = {
   loss: "0",
@@ -868,6 +859,46 @@ function serializeStateForTransport() {
 
 function clone(value) {
   return value.map((item) => ({ ...item }));
+}
+
+function buildDefaultInventory() {
+  const createItem = (name, ideal = 0) => ({
+    id: generateId(),
+    name,
+    ideal,
+    current: ideal,
+  });
+
+  const baseItems = [
+    createItem("サラダ油（8個入り）", 8),
+    createItem("出汁セット", 3),
+    createItem("タコ（1袋）", 2),
+  ];
+
+  const additionalNames = [
+    "そーす",
+    "まよ",
+    "天かす",
+    "ガスボンベ（◯本）",
+    "かつお",
+    "ふくろ",
+    "粉",
+    "はし",
+    "タコせん",
+    "油",
+    "しょうゆ",
+    "青のり",
+    "卵",
+    "長いも",
+    "たこ",
+    "白だし",
+    "紅生姜",
+    "出汁液",
+  ];
+
+  const additionalItems = additionalNames.map((name) => createItem(name));
+
+  return [...baseItems, ...additionalItems];
 }
 
 function resolveBackendOrigin() {
