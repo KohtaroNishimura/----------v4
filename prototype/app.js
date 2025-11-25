@@ -645,11 +645,13 @@ function buildShortageRequestLines() {
     }))
     .filter((item) => item.shortage > 0);
   if (!shortageItems.length) {
-    return ["理想在庫は足りています。"];
+    return ["【必要材料】なし（理想在庫クリア）"];
   }
-  return shortageItems.map(
-    (item) => `${item.name}を${item.shortage}つ確保いただけると助かります。`,
-  );
+  const lines = ["【必要材料】"];
+  shortageItems.forEach((item) => {
+    lines.push(`${item.name}：${item.shortage}`);
+  });
+  return lines;
 }
 
 function createDragHandle(row) {
