@@ -784,13 +784,6 @@ function writeStorage(key, value) {
 async function bootstrapState() {
   try {
     const remote = await fetchStateFromServer();
-    const remoteHasInventory =
-      Array.isArray(remote?.inventory) && remote.inventory.length > 0;
-    if (remoteHasInventory) {
-      applyStatePayload(remote);
-      persistStateLocally();
-      return;
-    }
     const localSnapshot = readLocalStateSnapshot();
     if (localSnapshot.inventory.length > 0) {
       state.inventory = localSnapshot.inventory;
@@ -802,6 +795,13 @@ async function bootstrapState() {
       } catch (error) {
         console.warn("Failed to seed backend state from local snapshot", error);
       }
+      return;
+    }
+    const remoteHasInventory =
+      Array.isArray(remote?.inventory) && remote.inventory.length > 0;
+    if (remoteHasInventory) {
+      applyStatePayload(remote);
+      persistStateLocally();
       return;
     }
     applyStatePayload(remote);
