@@ -192,6 +192,18 @@ textarea {
   margin-bottom: 1rem;
 }
 
+.material-received-inputs {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.material-received-inputs input,
+.material-received-inputs select {
+  width: auto;
+  flex: 1;
+}
+
 .inline-actions {
   display: flex;
   align-items: center;

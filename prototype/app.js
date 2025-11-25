@@ -12,6 +12,7 @@ const API_ENDPOINTS = {
 
 const PERSIST_DEBOUNCE_MS = 800;
 const MAX_COUNT_SELECT = 20;
+const MATERIAL_TIME_STEP_MINUTES = 30;
 let persistTimer = null;
 
 const defaultInventory = [
@@ -31,6 +32,7 @@ const defaultReport = {
   operationHours: "0",
   sales: "0",
   insights: "",
+  materialReceivedAt: "",
 };
 
 const state = {
@@ -91,6 +93,7 @@ function attachEventListeners() {
         updateLinePreview();
       });
     });
+    initializeMaterialReceivedControls();
   }
 
   elements.copyButton?.addEventListener("click", copyMessageToClipboard);
@@ -344,6 +347,41 @@ function hydrateReportForm() {
     const el = document.getElementById(inputId);
     if (el) el.value = state.report[key] ?? "";
   });
+  const materialDateInput = document.getElementById("material-received-date");
+  const materialTimeSelect = document.getElementById("material-received-time");
+  if (materialTimeSelect) {
+    ensureMaterialTimeOptions(materialTimeSelect);
+  }
+  const parsedMaterial = parseMaterialReceivedAt(
+    state.report.materialReceivedAt,
+  );
+  if (materialDateInput) {
+    materialDateInput.value = parsedMaterial?.date ?? "";
+  }
+  if (materialTimeSelect) {
+    materialTimeSelect.value = parsedMaterial?.time ?? "";
+  }
+}
+
+function initializeMaterialReceivedControls() {
+  const materialDateInput = document.getElementById("material-received-date");
+  const materialTimeSelect = document.getElementById("material-received-time");
+  if (!materialDateInput && !materialTimeSelect) {
+    return;
+  }
+  if (materialTimeSelect) {
+    ensureMaterialTimeOptions(materialTimeSelect);
+  }
+  const handleChange = () => {
+    const dateValue = materialDateInput?.value || "";
+    const timeValue = materialTimeSelect?.value || "";
+    state.report.materialReceivedAt =
+      dateValue && timeValue ? `${dateValue}T${timeValue}` : "";
+    queuePersistState();
+    updateLinePreview();
+  };
+  materialDateInput?.addEventListener("change", handleChange);
+  materialTimeSelect?.addEventListener("change", handleChange);
 }
 
 function updateLinePreview() {
@@ -371,6 +409,13 @@ function buildLineMessage() {
     });
   } else {
     lines.push("【在庫不足】なし（理想在庫クリア）");
+  }
+
+  const materialLine = getMaterialReceivedLine(
+    state.report.materialReceivedAt,
+  );
+  if (materialLine) {
+    lines.push("", materialLine);
   }
 
   lines.push("", "【日報テンプレ】");
@@ -448,6 +493,38 @@ function formatCurrency(value) {
   return numeric.toLocaleString("ja-JP");
 }
 
+function ensureMaterialTimeOptions(select) {
+  if (select.dataset.initialized === "true") return;
+  populateMaterialTimeOptions(select);
+  select.dataset.initialized = "true";
+}
+
+function populateMaterialTimeOptions(select) {
+  select.innerHTML = "";
+  const emptyOption = document.createElement("option");
+  emptyOption.value = "";
+  emptyOption.textContent = "未設定";
+  select.appendChild(emptyOption);
+  const totalMinutesInDay = 24 * 60;
+  for (
+    let minutes = 0;
+    minutes < totalMinutesInDay;
+    minutes += MATERIAL_TIME_STEP_MINUTES
+  ) {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    const label = `${padTimeSegment(hours)}:${padTimeSegment(mins)}`;
+    const option = document.createElement("option");
+    option.value = label;
+    option.textContent = label;
+    select.appendChild(option);
+  }
+}
+
+function padTimeSegment(value) {
+  return value.toString().padStart(2, "0");
+}
+
 function sanitizeInventory(items) {
   if (!Array.isArray(items) || !items.length) {
     return clone(defaultInventory);
@@ -462,6 +539,19 @@ function sanitizeInventory(items) {
 
 function normalizeCount(value) {
   return Math.max(0, parseNumber(value, 0));
+}
+
+function parseMaterialReceivedAt(value) {
+  if (typeof value !== "string" || !value.includes("T")) {
+    return null;
+  }
+  const [date, timePart] = value.split("T");
+  if (!date || !timePart) return null;
+  const time = timePart.slice(0, 5);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) {
+    return null;
+  }
+  return { date, time };
 }
 
 function createActionButton(label, title, handler) {
@@ -527,6 +617,25 @@ function isMultipleOfStep(value, step) {
   if (step <= 0) return true;
   const ratio = value / step;
   return Math.abs(ratio - Math.round(ratio)) < 1e-6;
+}
+
+function getMaterialReceivedLine(value) {
+  const parsed = parseMaterialReceivedAt(value);
+  if (!parsed) return "";
+  const formattedDate = formatMaterialReceivedDate(parsed.date);
+  return `材料受け取り: ${formattedDate} ${parsed.time}`;
+}
+
+function formatMaterialReceivedDate(dateString) {
+  const parts = dateString.split("-");
+  if (parts.length !== 3) return dateString;
+  const [year, month, day] = parts;
+  const numMonth = Number(month);
+  const numDay = Number(day);
+  if (!Number.isFinite(numMonth) || !Number.isFinite(numDay)) {
+    return dateString;
+  }
+  return `${year}/${numMonth}/${numDay}`;
 }
 
 function createDragHandle(row) {
