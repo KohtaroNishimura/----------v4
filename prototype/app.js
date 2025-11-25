@@ -772,8 +772,17 @@ function writeStorage(key, value) {
 async function bootstrapState() {
   try {
     const remote = await fetchStateFromServer();
+    const shouldSeedRemote =
+      !Array.isArray(remote?.inventory) || remote.inventory.length === 0;
     applyStatePayload(remote);
     persistStateLocally();
+    if (shouldSeedRemote && state.inventory.length) {
+      try {
+        await pushStateToServer();
+      } catch (error) {
+        console.warn("Failed to seed backend state", error);
+      }
+    }
   } catch (error) {
     console.warn("Falling back to local state", error);
     loadStateFromLocalStorage();

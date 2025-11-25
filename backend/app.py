@@ -4,12 +4,15 @@ import base64
 import json
 import os
 from pathlib import Path
+import uuid
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from openai import OpenAI
 import sqlite3
 import datetime
+
+from default_inventory import DEFAULT_INVENTORY
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = PROJECT_ROOT / "prototype"
@@ -37,6 +40,22 @@ else:
 
 # SQLite DB for storing reports and inventories
 DB_PATH = os.path.join(os.path.dirname(__file__), "data.db")
+
+
+def _generate_item_id() -> str:
+    return f"item-{uuid.uuid4()}"
+
+
+def _build_default_inventory_state() -> list[dict]:
+    return [
+        {
+            "id": _generate_item_id(),
+            "name": item.get("name", ""),
+            "ideal": item.get("ideal", 0),
+            "current": item.get("ideal", 0),
+        }
+        for item in DEFAULT_INVENTORY
+    ]
 
 
 def init_db() -> None:
@@ -80,6 +99,37 @@ def init_db() -> None:
         VALUES (1, '[]', '{}', 'null', ?)
         """,
         (datetime.datetime.utcnow().isoformat(),),
+    )
+    conn.commit()
+    conn.close()
+    seed_default_app_state()
+
+
+def seed_default_app_state() -> None:
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("SELECT inventory_json FROM app_state WHERE id = 1")
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        return
+    inventory_json = row[0]
+    try:
+        existing = json.loads(inventory_json or "[]")
+    except json.JSONDecodeError:
+        existing = []
+    if existing:
+        conn.close()
+        return
+    default_inventory = _build_default_inventory_state()
+    timestamp = datetime.datetime.utcnow().isoformat()
+    cur.execute(
+        """
+        UPDATE app_state
+        SET inventory_json = ?, updated_at = ?
+        WHERE id = 1
+        """,
+        (json.dumps(default_inventory, ensure_ascii=False), timestamp),
     )
     conn.commit()
     conn.close()
