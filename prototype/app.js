@@ -2,6 +2,7 @@ const STORAGE_KEYS = {
   inventory: "inventory-items",
   report: "daily-report",
   photo: "inventory-photo",
+  updatedAt: "app-state-updated-at",
 };
 
 const API_BASE = resolveBackendOrigin();
@@ -30,6 +31,7 @@ const state = {
   inventory: [],
   report: { ...defaultReport },
   photo: null,
+  updatedAt: null,
 };
 
 const dragState = {
@@ -88,6 +90,16 @@ function attachEventListeners() {
   }
 
   elements.copyButton?.addEventListener("click", copyMessageToClipboard);
+
+  window.addEventListener("focus", () => {
+    refreshStateFromServer({ silent: true });
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      refreshStateFromServer({ silent: true });
+    }
+  });
 }
 
 function renderInventoryRows() {
@@ -783,12 +795,22 @@ function writeStorage(key, value) {
 
 async function bootstrapState() {
   try {
-    const remote = await fetchStateFromServer();
     const localSnapshot = readLocalStateSnapshot();
+
+    const remote = await fetchStateFromServer();
+    const remoteHasInventory =
+      Array.isArray(remote?.inventory) && remote.inventory.length > 0;
+    if (remoteHasInventory) {
+      applyStatePayload(remote);
+      persistStateLocally();
+      return;
+    }
+
     if (localSnapshot.inventory.length > 0) {
       state.inventory = localSnapshot.inventory;
       state.report = localSnapshot.report;
       state.photo = localSnapshot.photo;
+      state.updatedAt = localSnapshot.updatedAt ?? null;
       persistStateLocally();
       try {
         await pushStateToServer();
@@ -797,18 +819,30 @@ async function bootstrapState() {
       }
       return;
     }
-    const remoteHasInventory =
-      Array.isArray(remote?.inventory) && remote.inventory.length > 0;
-    if (remoteHasInventory) {
-      applyStatePayload(remote);
-      persistStateLocally();
-      return;
-    }
+
     applyStatePayload(remote);
     persistStateLocally();
   } catch (error) {
     console.warn("Falling back to local state", error);
     loadStateFromLocalStorage();
+  }
+}
+
+async function refreshStateFromServer({ silent } = {}) {
+  try {
+    const remote = await fetchStateFromServer();
+    const nextUpdatedAt = remote?.updated_at ?? null;
+    if (nextUpdatedAt && state.updatedAt === nextUpdatedAt) return;
+    applyStatePayload(remote);
+    persistStateLocally();
+    renderInventoryRows();
+    hydrateReportForm();
+    hydratePhotoPreview();
+    updateLinePreview();
+  } catch (error) {
+    if (!silent) {
+      console.warn("Failed to refresh state from backend", error);
+    }
   }
 }
 
@@ -835,6 +869,7 @@ function loadStateFromLocalStorage() {
   }
   state.report = snapshot.report;
   state.photo = snapshot.photo;
+  state.updatedAt = snapshot.updatedAt ?? null;
 }
 
 function applyStatePayload(payload) {
@@ -844,12 +879,14 @@ function applyStatePayload(payload) {
   state.inventory = sanitizeInventory(inventory);
   state.report = { ...defaultReport, ...(payload?.report || {}) };
   state.photo = payload?.photo ?? null;
+  state.updatedAt = payload?.updated_at ?? null;
 }
 
 function persistStateLocally() {
   writeStorage(STORAGE_KEYS.inventory, state.inventory);
   writeStorage(STORAGE_KEYS.report, state.report);
   writeStorage(STORAGE_KEYS.photo, state.photo);
+  writeStorage(STORAGE_KEYS.updatedAt, state.updatedAt);
 }
 
 function queuePersistState() {
@@ -864,6 +901,13 @@ function scheduleStateSync() {
   }
 
   stateSyncInFlight = pushStateToServer()
+    .then((remote) => {
+      const nextUpdatedAt = remote?.updated_at ?? null;
+      if (nextUpdatedAt) {
+        state.updatedAt = nextUpdatedAt;
+        persistStateLocally();
+      }
+    })
     .catch((error) => {
       console.warn("Failed to sync state to backend", error);
     })
@@ -913,7 +957,8 @@ function readLocalStateSnapshot() {
   const storedReport = readStorage(STORAGE_KEYS.report);
   const report = { ...defaultReport, ...(storedReport || {}) };
   const photo = readStorage(STORAGE_KEYS.photo);
-  return { inventory, report, photo };
+  const updatedAt = readStorage(STORAGE_KEYS.updatedAt);
+  return { inventory, report, photo, updatedAt };
 }
 
 function buildDefaultInventory() {
