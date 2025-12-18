@@ -4,18 +4,23 @@ import base64
 import json
 import os
 from pathlib import Path
+import threading
 import uuid
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from openai import OpenAI
-import sqlite3
 import datetime
 
 from backend.default_inventory import DEFAULT_INVENTORY
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = PROJECT_ROOT / "prototype"
+DATA_DIR = Path(__file__).resolve().parent
+STATE_FILE = DATA_DIR / "app_state.json"
+REPORTS_FILE = DATA_DIR / "reports.json"
+STATE_LOCK = threading.Lock()
+REPORTS_LOCK = threading.Lock()
 
 app = Flask(
     __name__,
@@ -38,8 +43,7 @@ else:
         # warn user when not in mock mode
         print("WARNING: OPENAI_API_KEY not set. Set OPENAI_API_KEY or enable MOCK_VISION=1 to use mock responses.")
 
-# SQLite DB for storing reports and inventories
-DB_PATH = os.path.join(os.path.dirname(__file__), "data.db")
+# JSON files for storing reports and inventories
 
 
 def _generate_item_id() -> str:
@@ -58,127 +62,79 @@ def _build_default_inventory_state() -> list[dict]:
     ]
 
 
-def init_db() -> None:
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS reports (
-            id INTEGER PRIMARY KEY,
-            created_at TEXT NOT NULL,
-            notes TEXT
-        )
-        """
-    )
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS inventories (
-            id INTEGER PRIMARY KEY,
-            report_id INTEGER NOT NULL,
-            name TEXT,
-            ideal INTEGER,
-            current INTEGER,
-            FOREIGN KEY(report_id) REFERENCES reports(id)
-        )
-        """
-    )
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS app_state (
-            id INTEGER PRIMARY KEY CHECK (id = 1),
-            inventory_json TEXT,
-            report_json TEXT,
-            photo_json TEXT,
-            updated_at TEXT NOT NULL
-        )
-        """
-    )
-    cur.execute(
-        """
-        INSERT OR IGNORE INTO app_state (id, inventory_json, report_json, photo_json, updated_at)
-        VALUES (1, '[]', '{}', 'null', ?)
-        """,
-        (datetime.datetime.utcnow().isoformat(),),
-    )
-    conn.commit()
-    conn.close()
-    seed_default_app_state()
-
-
-def seed_default_app_state() -> None:
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute("SELECT inventory_json FROM app_state WHERE id = 1")
-    row = cur.fetchone()
-    if not row:
-        conn.close()
-        return
-    inventory_json = row[0]
+def _read_json_file(path: Path, default):
     try:
-        existing = json.loads(inventory_json or "[]")
+        with path.open("r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except FileNotFoundError:
+        return default
     except json.JSONDecodeError:
-        existing = []
-    if existing:
-        conn.close()
-        return
-    default_inventory = _build_default_inventory_state()
-    timestamp = datetime.datetime.utcnow().isoformat()
-    cur.execute(
-        """
-        UPDATE app_state
-        SET inventory_json = ?, updated_at = ?
-        WHERE id = 1
-        """,
-        (json.dumps(default_inventory, ensure_ascii=False), timestamp),
-    )
-    conn.commit()
-    conn.close()
+        return default
+
+
+def _write_json_file(path: Path, payload) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    with tmp_path.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, ensure_ascii=False, indent=2)
+    tmp_path.replace(path)
+
+
+def init_storage() -> None:
+    with STATE_LOCK:
+        state = _read_json_file(
+            STATE_FILE,
+            {
+                "inventory": [],
+                "report": {},
+                "photo": None,
+                "updated_at": None,
+            },
+        )
+        if not state["inventory"]:
+            state["inventory"] = _build_default_inventory_state()
+            state["updated_at"] = datetime.datetime.utcnow().isoformat()
+            _write_json_file(STATE_FILE, state)
+    with REPORTS_LOCK:
+        if not REPORTS_FILE.exists():
+            _write_json_file(REPORTS_FILE, {"reports": []})
 
 
 def save_report(data: dict) -> int:
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
     created_at = datetime.datetime.utcnow().isoformat()
-    notes = data.get("notes")
-    cur.execute("INSERT INTO reports (created_at, notes) VALUES (?, ?)", (created_at, notes))
-    report_id = cur.lastrowid
+    entry = {
+        "created_at": created_at,
+        "notes": data.get("notes"),
+        "inventory": [],
+    }
     for item in data.get("inventory", []):
-        cur.execute(
-            "INSERT INTO inventories (report_id, name, ideal, current) VALUES (?, ?, ?, ?)",
-            (
-                report_id,
-                item.get("name"),
-                item.get("ideal") if isinstance(item.get("ideal"), int) else None,
-                item.get("current") if isinstance(item.get("current"), int) else None,
-            ),
+        entry["inventory"].append(
+            {
+                "name": item.get("name"),
+                "ideal": item.get("ideal") if isinstance(item.get("ideal"), int) else None,
+                "current": item.get("current") if isinstance(item.get("current"), int) else None,
+            }
         )
-    conn.commit()
-    conn.close()
-    return report_id
+    with REPORTS_LOCK:
+        store = _read_json_file(REPORTS_FILE, {"reports": []})
+        reports = store.get("reports", [])
+        next_id = (reports[-1]["id"] + 1) if reports else 1
+        entry["id"] = next_id
+        reports.append(entry)
+        _write_json_file(REPORTS_FILE, {"reports": reports})
+    return entry["id"]
 
 
 def get_latest_report():
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute("SELECT id, created_at, notes FROM reports ORDER BY id DESC LIMIT 1")
-    row = cur.fetchone()
-    if not row:
-        conn.close()
+    store = _read_json_file(REPORTS_FILE, {"reports": []})
+    reports = store.get("reports", [])
+    if not reports:
         return None
-    report_id, created_at, notes = row
-    cur.execute(
-        "SELECT name, ideal, current FROM inventories WHERE report_id = ? ORDER BY id",
-        (report_id,),
-    )
-    items = [
-        {"name": r[0], "ideal": r[1], "current": r[2]} for r in cur.fetchall()
-    ]
-    conn.close()
-    return {"id": report_id, "created_at": created_at, "notes": notes, "inventory": items}
+    return reports[-1]
 
 
-# initialize DB on import
-init_db()
+# initialize storage on import
+init_storage()
 
 
 def _extract_base64_from_file(file_storage) -> str:
@@ -187,21 +143,20 @@ def _extract_base64_from_file(file_storage) -> str:
 
 
 def _load_app_state() -> dict:
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT inventory_json, report_json, photo_json, updated_at FROM app_state WHERE id = 1"
+    data = _read_json_file(
+        STATE_FILE,
+        {
+            "inventory": [],
+            "report": {},
+            "photo": None,
+            "updated_at": None,
+        },
     )
-    row = cur.fetchone()
-    conn.close()
-    if not row:
-        return {"inventory": [], "report": {}, "photo": None, "updated_at": None}
-    inventory_json, report_json, photo_json, updated_at = row
     return {
-        "inventory": json.loads(inventory_json or "[]"),
-        "report": json.loads(report_json or "{}"),
-        "photo": json.loads(photo_json or "null"),
-        "updated_at": updated_at,
+        "inventory": data.get("inventory", []),
+        "report": data.get("report", {}),
+        "photo": data.get("photo"),
+        "updated_at": data.get("updated_at"),
     }
 
 
@@ -231,23 +186,9 @@ def _sanitize_app_state(payload: dict) -> dict:
 def save_app_state(payload: dict) -> dict:
     sanitized = _sanitize_app_state(payload)
     timestamp = datetime.datetime.utcnow().isoformat()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute(
-        """
-        UPDATE app_state
-        SET inventory_json = ?, report_json = ?, photo_json = ?, updated_at = ?
-        WHERE id = 1
-        """,
-        (
-            json.dumps(sanitized["inventory"], ensure_ascii=False),
-            json.dumps(sanitized["report"], ensure_ascii=False),
-            json.dumps(sanitized["photo"], ensure_ascii=False),
-            timestamp,
-        ),
-    )
-    conn.commit()
-    conn.close()
+    sanitized["updated_at"] = timestamp
+    with STATE_LOCK:
+        _write_json_file(STATE_FILE, sanitized)
     sanitized["updated_at"] = timestamp
     return sanitized
 
@@ -366,7 +307,7 @@ def analyze_inventory():
     except Exception as exc:
         return jsonify({"error": "Failed to parse model response", "detail": str(exc)}), 500
 
-    # persist the model output to SQLite (best-effort)
+    # persist the model output to JSON storage (best-effort)
     try:
         save_report(json_content)
     except Exception as exc:

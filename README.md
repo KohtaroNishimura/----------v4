@@ -35,7 +35,7 @@
 | 写真アップロード | Flask UIからの画像フォーム送信 |
 | 写真解析（在庫判定） | YOLOv8 / YOLOv10（無料モデル） |
 | サーバーサイド | Flask（Python） |
-| データ保存 | SQLite（「当日の在庫」「日報」を保存） |
+| データ保存 | Flaskサーバー内のJSONファイル（「当日の在庫」「日報」を保存） |
 | メッセージ生成 | Flask内部で在庫・日報を整形 |
 | LINE送信 | LINE Messaging API（無料枠） |
 
@@ -70,7 +70,7 @@ python backend/app.py
 
 サーバーを立ち上げると `http://localhost:8000/` でフロントエンドも同じ Flask から配信され、PC/スマホのブラウザでそのまま操作できます。
 
-補足: `prototype/index.html` を直接 `file://` で開いた場合は、バックエンドが起動していない限り在庫・日報は `localStorage` にのみ保存されます（DBには保存されません）。SQLite に保存したい場合は、上記のように Flask を起動して `http://localhost:8000/` から開いてください。
+補足: `prototype/index.html` を直接 `file://` で開いた場合は、バックエンドが起動していない限り在庫・日報は `localStorage` にのみ保存されます（サーバー側のJSONストレージには書き込まれません）。サーバー側に保存する場合は、上記のように Flask を起動して `http://localhost:8000/` から開いてください。
 
 注意: 画像解析は現状で外部の言語モデル（OpenAI Responses）へ委ねる設計になっています。将来的にYOLO等の検出モデルに差し替える場合は、`backend/app.py` の `analyze_inventory` 内の呼び出しを差し替えてください。
 
@@ -89,7 +89,7 @@ docker run \
   takoyaki-inventory
 ```
 
-サーバーの 8000 番ポートを外部公開し、スマホから `https://<your-domain>/` を開けば同じ UI を操作できます。`backend/data.db`（SQLite）はコンテナ内に作成されるため、永続化したい場合は `-v $(pwd)/backend/data.db:/app/backend/data.db` といったボリュームを付けてください。
+サーバーの 8000 番ポートを外部公開し、スマホから `https://<your-domain>/` を開けば同じ UI を操作できます。サーバー側の `backend/app_state.json` / `backend/reports.json` にデータが書き込まれるため、永続化したい場合は `-v $(pwd)/backend:/app/backend` などのボリュームを付けて保存先ファイルをホスト側にマウントしてください。
 
 ### B. Render / Railway / Heroku などの PaaS にデプロイ
 
@@ -102,4 +102,4 @@ docker run \
    - `MOCK_VISION=1`: Vision モックで動かす場合に指定（本番利用では 0 または未設定）。
 4. デプロイ完了後に発行された URL をスマホから開けば、写真アップロード・日報入力までブラウザだけで完結します。
 
-PaaS のファイルシステムはリセットされることがあるので、SQLite の永続化が必要な場合は外部ストレージ（Supabase、Neon、Cloud Storage 等）への移行を検討してください。
+PaaS のファイルシステムはリセットされることがあるので、在庫や日報を長期保存したい場合は Render のPersistent Diskや外部ストレージ（Supabase・Cloud Storage 等）への移行を検討してください。
