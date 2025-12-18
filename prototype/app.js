@@ -10,10 +10,10 @@ const API_ENDPOINTS = {
   vision: `${API_BASE}/vision/analyze`,
 };
 
-const PERSIST_DEBOUNCE_MS = 800;
 const MAX_COUNT_SELECT = 20;
 const MATERIAL_TIME_STEP_MINUTES = 30;
-let persistTimer = null;
+let stateSyncInFlight = null;
+let stateSyncQueued = false;
 
 const defaultInventory = buildDefaultInventory();
 
@@ -854,15 +854,26 @@ function persistStateLocally() {
 
 function queuePersistState() {
   persistStateLocally();
-  if (persistTimer) {
-    clearTimeout(persistTimer);
+  scheduleStateSync();
+}
+
+function scheduleStateSync() {
+  if (stateSyncInFlight) {
+    stateSyncQueued = true;
+    return;
   }
-  persistTimer = setTimeout(() => {
-    persistTimer = null;
-    pushStateToServer().catch((error) => {
+
+  stateSyncInFlight = pushStateToServer()
+    .catch((error) => {
       console.warn("Failed to sync state to backend", error);
+    })
+    .finally(() => {
+      stateSyncInFlight = null;
+      if (stateSyncQueued) {
+        stateSyncQueued = false;
+        scheduleStateSync();
+      }
     });
-  }, PERSIST_DEBOUNCE_MS);
 }
 
 async function pushStateToServer() {

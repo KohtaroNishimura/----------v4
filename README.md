@@ -70,7 +70,7 @@ python backend/app.py
 
 サーバーを立ち上げると `http://localhost:8000/` でフロントエンドも同じ Flask から配信され、PC/スマホのブラウザでそのまま操作できます。
 
-補足: `prototype/index.html` を直接 `file://` で開いた場合は、バックエンドが起動していない限り在庫・日報は `localStorage` にのみ保存されます（サーバー側のJSONストレージには書き込まれません）。サーバー側に保存する場合は、上記のように Flask を起動して `http://localhost:8000/` から開いてください。
+補足: `prototype/index.html` を直接 `file://` で開いた場合は、バックエンドが起動していない限り在庫・日報は `localStorage` にのみ保存されます（サーバー側のJSONストレージには書き込まれません）。サーバー側に保存する場合は、上記のように Flask を起動して `http://localhost:8000/` から開いてください。`http://...` で開いている場合、在庫/日報の変更のたびに `PUT /state` でサーバーへ即時同期されます。
 
 注意: 画像解析は現状で外部の言語モデル（OpenAI Responses）へ委ねる設計になっています。将来的にYOLO等の検出モデルに差し替える場合は、`backend/app.py` の `analyze_inventory` 内の呼び出しを差し替えてください。
 
