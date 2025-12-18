@@ -311,6 +311,11 @@ def analyze_inventory():
             ],
             "notes": "これはモック応答です。MOCK_VISION=1 により生成されています。",
         }
+        # Persist mock output too, so local testing matches production flow.
+        try:
+            save_report(simulated)
+        except Exception as exc:
+            print("WARNING: Failed to save mock report to DB:", exc)
         return jsonify(simulated)
 
     if client is None:

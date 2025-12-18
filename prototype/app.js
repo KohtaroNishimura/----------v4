@@ -952,6 +952,11 @@ function resolveBackendOrigin() {
 
   const { protocol, hostname, port } = window.location;
 
+  // When opening the prototype directly via file://, default to local backend.
+  if (protocol === "file:" || !hostname) {
+    return "http://localhost:8000";
+  }
+
   // when frontend is running on a different port (e.g. 8001), force backend 8000
   if (hostname === "localhost" || hostname === "127.0.0.1") {
     return `${protocol}//${hostname}:8000`;
