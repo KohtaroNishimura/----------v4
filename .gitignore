@@ -1,4 +1,0 @@
-.venv/
-__pycache__/
-backend/app_state.json
-backend/reports.json
